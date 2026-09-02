@@ -14,6 +14,13 @@ Omarchy and uses Omarchy's existing weather and media facilities.
 - Compact bar label combining time, weather, and the active track.
 - Theme-aware styling using Omarchy Shell colors and spacing.
 
+## Requirements
+
+- Omarchy Shell with its built-in weather and media services.
+- An MPRIS-compatible player for media information and controls.
+
+Celestune Bar requires no additional system packages or privileged access.
+
 ## Installation
 
 ```bash
