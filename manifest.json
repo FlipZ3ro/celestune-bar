@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "celestune-bar",
+  "name": "Celestune Bar",
+  "version": "1.0.0",
+  "author": "oxrapzz",
+  "license": "GPL-3.0-only",
+  "description": "A unified bar widget with calendar, weather, and media controls for Omarchy Shell.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Celestune Bar",
+    "description": "One bar widget opening a unified calendar, weather, and media dashboard.",
+    "category": "Info",
+    "aliases": [
+      "calendar",
+      "weather",
+      "media",
+      "bar",
+      "dashboard"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}
