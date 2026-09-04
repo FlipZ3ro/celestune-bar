@@ -30,11 +30,27 @@ omarchy plugin add https://github.com/FlipZ3ro/celestune-bar.git --enable
 Celestune Bar is placed in the center section by default. You can reposition
 it through Omarchy's bar configuration.
 
+### Recommended Setup
+
+To use Celestune Bar as your primary clock and prevent duplicate clock displays:
+
+```bash
+omarchy plugin disable omarchy.clock
+```
+
+To pin Celestune Bar to the exact physical center of the status bar (preventing it from shifting when neighboring widgets such as indicators expand on hover), set `centerAnchor` in `~/.config/omarchy/shell.json`:
+
+```json
+"bar": {
+  "centerAnchor": "celestune-bar"
+}
+```
+
 ## Controls
 
 - Left click: open or close the dashboard.
 - Middle click: play or pause media.
-- Right click: refresh weather.
+- Right click: cycle clock format (persists selection to `shell.json`).
 - Scroll: previous or next track.
 
 ## Removal

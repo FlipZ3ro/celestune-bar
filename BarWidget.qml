@@ -42,13 +42,42 @@ BarWidget {
     if (weatherPanel && weatherPanel.refresh) weatherPanel.refresh()
   }
 
+  readonly property var clockFormats: [
+    "ddd HH:mm",
+    "HH:mm",
+    "h:mm AP",
+    "ddd d MMM HH:mm",
+    "ddd d MMM h:mm AP",
+    "dddd HH:mm",
+    "dddd h:mm AP",
+    "yyyy-MM-dd HH:mm"
+  ]
+
+  readonly property string activeClockFormat: setting("format", "ddd HH:mm")
+
+  function cycleClockFormat() {
+    var current = String(activeClockFormat)
+    var idx = clockFormats.indexOf(current)
+    var next = clockFormats[(idx + 1) % clockFormats.length]
+
+    var entry = { id: root.moduleName }
+    for (var key in root.settings) if (key !== "id") entry[key] = root.settings[key]
+    entry["format"] = next
+
+    root.settings = entry
+    root.now = new Date()
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    }
+  }
+
   function shortText(value, limit) {
     var text = String(value || "")
     return text.length > limit ? text.slice(0, limit - 1) + "…" : text
   }
 
   function barLabel() {
-    var clock = Qt.formatDateTime(now, "ddd HH:mm")
+    var clock = Qt.formatDateTime(now, activeClockFormat)
     var weather = weatherIcon + (weatherTemp !== "" ? " " + weatherTemp : "")
     var media = hasMedia ? playIcon + " " + shortText(mediaTitle, 18) : ""
     if (vertical) return weatherIcon
@@ -65,6 +94,12 @@ BarWidget {
   }
 
   onBarChanged: injectWeather()
+
+  SystemClock {
+    id: clock
+    precision: SystemClock.Minutes
+    onDateChanged: root.now = date
+  }
 
   Timer {
     interval: 30000
@@ -97,11 +132,10 @@ BarWidget {
     text: root.barLabel()
     active: root.opened
     horizontalMargin: 7
-    tooltipText: "Dashboard\nKlik: buka · Tengah: play/pause · Kanan: refresh cuaca"
 
     onPressed: function(button) {
       if (button === Qt.MiddleButton) root.mediaAction("playPause")
-      else if (button === Qt.RightButton) root.refreshWeather()
+      else if (button === Qt.RightButton) root.cycleClockFormat()
       else root.togglePanel()
     }
 
