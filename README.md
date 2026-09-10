@@ -2,7 +2,9 @@
 
 A unified Omarchy bar widget containing a calendar, weather summary and
 forecast, and MPRIS media controls. Celestune Bar is built natively for
-Omarchy and uses Omarchy's existing weather and media facilities.
+Omarchy: weather comes from Omarchy's weather panel, and media is read
+directly from Quickshell's MPRIS service (players like Spotify, Sonora,
+browsers, etc.).
 
 ![Celestune preview](preview.png)
 
@@ -16,7 +18,7 @@ Omarchy and uses Omarchy's existing weather and media facilities.
 
 ## Requirements
 
-- Omarchy Shell with its built-in weather and media services.
+- Omarchy Shell with its built-in weather panel.
 - An MPRIS-compatible player for media information and controls.
 
 Celestune Bar requires no additional system packages or privileged access.

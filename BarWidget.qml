@@ -7,7 +7,9 @@ BarWidget {
   id: root
   moduleName: "celestune-bar"
 
-  readonly property var mediaService: bar?.shell?.firstPartyServiceFor("omarchy.media")
+  // The shell only grants the omarchy.media proxy to full-bar plugins, so
+  // read MPRIS directly through a local controller instead.
+  readonly property var mediaService: media
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
   readonly property var weatherPanel: weatherLoader.item
   readonly property bool hasMedia: activePlayer !== null
@@ -66,6 +68,10 @@ BarWidget {
 
   onBarChanged: injectWeather()
 
+  MediaSource {
+    id: media
+  }
+
   Timer {
     interval: 30000
     repeat: true
@@ -97,7 +103,7 @@ BarWidget {
     text: root.barLabel()
     active: root.opened
     horizontalMargin: 7
-    tooltipText: "Dashboard\nKlik: buka · Tengah: play/pause · Kanan: refresh cuaca"
+    tooltipText: "Dashboard\nClick: open · Middle: play/pause · Right: refresh weather · Scroll: prev/next track"
 
     onPressed: function(button) {
       if (button === Qt.MiddleButton) root.mediaAction("playPause")
