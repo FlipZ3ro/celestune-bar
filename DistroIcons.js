@@ -29,20 +29,24 @@ var DISTROS = [
 ];
 
 function findDistro(key) {
-  if (!key) return DISTROS[0];
+  if (!key) return null;
   var normalized = String(key).toLowerCase().trim();
   for (var i = 0; i < DISTROS.length; i++) {
     if (DISTROS[i].key === normalized) return DISTROS[i];
   }
-  return DISTROS[0];
+  return null;
 }
 
+// Original media-card cat glyph used when OmaLogo is not installed / not in
+// the bar layout.
+var DEFAULT_HEADER = { key: "cat", name: "Cat", icon: "󰄛", font: "nerd" };
+
 // Reads the distro OmaLogo is configured with from the bar layout config
-// (shell.json "bar.layout"). Falls back to the Omarchy logo when OmaLogo is
-// not placed in the bar.
+// (shell.json "bar.layout"). Returns null when OmaLogo is not placed in the
+// bar so callers can keep the default cat icon.
 function omalogoDistroKey(barConfig) {
   var layout = barConfig && barConfig.layout ? barConfig.layout : null;
-  if (!layout) return "omarchy";
+  if (!layout) return null;
   var sections = ["left", "center", "right"];
   for (var s = 0; s < sections.length; s++) {
     var entries = layout[sections[s]];
@@ -53,5 +57,9 @@ function omalogoDistroKey(barConfig) {
         return String(entry.distro || "arch");
     }
   }
-  return "omarchy";
+  return null;
+}
+
+function headerIcon(barConfig) {
+  return findDistro(omalogoDistroKey(barConfig)) || DEFAULT_HEADER;
 }

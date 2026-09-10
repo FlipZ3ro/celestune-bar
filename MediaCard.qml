@@ -10,9 +10,10 @@ BorderSurface {
   required property QtObject bar
   property var mediaService: null
 
-  // Header icon mirrors whatever distro logo the OmaLogo bar widget shows.
+  // Header icon mirrors OmaLogo when that widget is in the bar; otherwise the
+  // original cat glyph is kept as the default.
   readonly property var barConfig: bar && bar.shell ? bar.shell.barConfig : null
-  readonly property var headerDistro: DistroIcons.findDistro(DistroIcons.omalogoDistroKey(barConfig))
+  readonly property var headerDistro: DistroIcons.headerIcon(barConfig)
 
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
   readonly property bool hasMedia: activePlayer !== null
