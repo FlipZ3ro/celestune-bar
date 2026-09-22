@@ -69,6 +69,11 @@ Weather can still be refreshed with the refresh button inside the dashboard.
 omarchy plugin remove celestune-bar
 ```
 
+## Contributors
+
+- [Pierorivera1](https://github.com/Pierorivera1) — persistent clock formats and setup documentation.
+- [VideoPants](https://github.com/VideoPants) — direct MPRIS support for Omarchy 4.
+
 ## License
 
 Celestune Bar is licensed under the GNU General Public License v3.0 only.
