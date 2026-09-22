@@ -21,7 +21,7 @@ from Quickshell's MPRIS service.
 ## Requirements
 
 - Omarchy Shell with its built-in weather panel.
-- GeoClue for device-location Auto mode (`omarchy pkg add geoclue`).
+- GeoClue is optional and only required for device-location Auto mode.
 - An MPRIS-compatible player for media information and controls.
 
 Manual weather locations work without GeoClue. Celestune Bar requires no
