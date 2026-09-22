@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
@@ -8,6 +9,11 @@ BorderSurface {
   required property QtObject bar
   property var weather: null
   property date now: new Date()
+
+  property bool editingLocation: false
+  property bool savingLocation: false
+  property string locationError: ""
+  property bool deviceLocationResolved: false
 
   readonly property string icon: weather && weather.label !== "" ? weather.label : "󰖐"
   readonly property string temperature: weather && weather.reportTempNum !== ""
@@ -22,6 +28,169 @@ BorderSurface {
   }
   readonly property var forecast: weather && weather.forecastDays
     ? weather.forecastDays.slice(0, 3) : []
+
+  function startEditingLocation() {
+    editingLocation = true
+    locationError = ""
+    locationField.text = weather && weather.configuredLocation
+      ? weather.configuredLocation : ""
+    Qt.callLater(function() {
+      locationField.selectAll()
+      locationField.forceActiveFocus()
+    })
+  }
+
+  function cancelEditingLocation() {
+    autoLocationTimeout.stop()
+    if (geocodeProc.running) geocodeProc.running = false
+    if (deviceLocationProc.running) deviceLocationProc.running = false
+    locationField.focus = false
+    editingLocation = false
+    savingLocation = false
+    locationError = ""
+  }
+
+  function saveLocation() {
+    var query = locationField.text.trim()
+    if (query === "") {
+      useAutomaticLocation()
+      return
+    }
+
+    savingLocation = true
+    locationError = ""
+    geocodeProc.command = ["curl", "-fsS", "--max-time", "5",
+      "https://geocoding-api.open-meteo.com/v1/search?name="
+        + encodeURIComponent(query) + "&count=1&language=id&format=json"]
+    geocodeProc.running = true
+  }
+
+  function applyLocation(name, latitude, longitude) {
+    if (!weather) return
+    weather.savingLocation = true
+    weather.savingLocationQueryStarted = false
+    weather.configuredLocationState = {
+      name: name,
+      latitude: latitude,
+      longitude: longitude
+    }
+    weather.persistLocation(name, latitude, longitude)
+    editingLocation = false
+    savingLocation = false
+  }
+
+  function useAutomaticLocation() {
+    if (!weather || deviceLocationProc.running) return
+    deviceLocationResolved = false
+    savingLocation = true
+    locationError = ""
+    autoLocationTimeout.restart()
+    deviceLocationProc.running = true
+  }
+
+  function applyDeviceLocation(rawOutput) {
+    autoLocationTimeout.stop()
+    var raw = String(rawOutput || "")
+    var pattern = /Latitude:\s*([-+]?[0-9]+(?:\.[0-9]+)?)[\s\S]*?Longitude:\s*([-+]?[0-9]+(?:\.[0-9]+)?)[\s\S]*?Accuracy:\s*([0-9]+(?:\.[0-9]+)?)/g
+    var best = null
+    var match
+
+    while ((match = pattern.exec(raw)) !== null) {
+      var candidate = {
+        latitude: Number(match[1]),
+        longitude: Number(match[2]),
+        accuracy: Number(match[3])
+      }
+      if (!best || candidate.accuracy < best.accuracy) best = candidate
+    }
+
+    deviceLocationResolved = true
+    if (!best) {
+      savingLocation = false
+      locationError = "Lokasi perangkat tidak tersedia"
+      return
+    }
+
+    // GeoClue reports IP fallbacks at roughly 25 km. Do not replace a good
+    // manual city with that misleading result; only accept a real Wi-Fi/GPS fix.
+    if (best.accuracy > 5000) {
+      savingLocation = false
+      locationError = "Lokasi perangkat belum akurat"
+      return
+    }
+
+    applyLocation("Lokasi saat ini", best.latitude, best.longitude)
+  }
+
+  Process {
+    id: geocodeProc
+
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var raw = String(text || "").trim()
+        try {
+          var parsed = JSON.parse(raw)
+          var result = parsed && parsed.results && parsed.results.length > 0
+            ? parsed.results[0] : null
+          if (!result) {
+            root.savingLocation = false
+            root.locationError = "Lokasi tidak ditemukan"
+            return
+          }
+          root.applyLocation(String(result.name || locationField.text.trim()),
+            Number(result.latitude), Number(result.longitude))
+        } catch (error) {
+          root.savingLocation = false
+          root.locationError = "Gagal mencari lokasi"
+        }
+      }
+    }
+
+    onExited: function(exitCode) {
+      if (exitCode !== 0 && root.savingLocation) {
+        root.savingLocation = false
+        root.locationError = "Gagal mencari lokasi"
+      }
+    }
+  }
+
+  Process {
+    id: deviceLocationProc
+    // Both timeout(1) and the QML watchdog below bound the request. The second
+    // guard also covers a stuck D-Bus client that never emits process exit.
+    command: ["timeout", "3s", "/usr/lib/geoclue-2.0/demos/where-am-i",
+      "-t", "2", "-a", "8"]
+
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.applyDeviceLocation(text)
+    }
+
+    onExited: function(exitCode) {
+      autoLocationTimeout.stop()
+      if (!root.deviceLocationResolved && root.savingLocation) {
+        root.savingLocation = false
+        root.locationError = exitCode === 127
+          ? "GeoClue belum terpasang"
+          : "Lokasi perangkat tidak tersedia"
+      }
+    }
+  }
+
+  Timer {
+    id: autoLocationTimeout
+    interval: 3500
+
+    onTriggered: {
+      if (deviceLocationProc.running) deviceLocationProc.running = false
+      if (!root.deviceLocationResolved) {
+        root.deviceLocationResolved = true
+        root.savingLocation = false
+        root.locationError = "Lokasi perangkat tidak tersedia"
+      }
+    }
+  }
 
   color: Style.normalFillFor(bar.foreground, Color.accent)
   borderSpec: Border.controlSpec("normal", bar.foreground, Color.accent)
@@ -80,11 +249,12 @@ BorderSurface {
         }
 
         Column {
-          width: parent.width - currentBlock.width - refreshButton.width - summaryRow.spacing * 2
+          width: parent.width - currentBlock.width - weatherActions.width - summaryRow.spacing * 2
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(1)
 
           Text {
+            visible: !root.editingLocation
             width: parent.width
             textFormat: Text.PlainText
             text: root.location
@@ -93,24 +263,102 @@ BorderSurface {
             font.pixelSize: Style.font.body
             font.bold: true
             elide: Text.ElideRight
+
+            TapHandler {
+              onTapped: root.startEditingLocation()
+            }
+
+            HoverHandler {
+              cursorShape: Qt.PointingHandCursor
+            }
+          }
+
+          TextField {
+            id: locationField
+            visible: root.editingLocation
+            width: parent.width
+            enabled: !root.savingLocation
+            placeholderText: "Cari kota"
+            foreground: root.bar.foreground
+            font.family: root.bar.fontFamily
+
+            Keys.onPressed: function(event) {
+              if (event.key === Qt.Key_Escape) {
+                root.cancelEditingLocation()
+                event.accepted = true
+              } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                root.saveLocation()
+                event.accepted = true
+              }
+            }
           }
 
           Text {
-            text: Qt.formatDate(root.now, "dddd, d MMMM")
+            text: root.editingLocation
+              ? (root.locationError !== "" ? root.locationError : "Enter: simpan · Auto: lokasi perangkat")
+              : Qt.formatDate(root.now, "dddd, d MMMM")
             color: Qt.darker(root.bar.foreground, 1.45)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
           }
         }
 
-        Button {
-          id: refreshButton
+        Row {
+          id: weatherActions
           anchors.verticalCenter: parent.verticalCenter
-          iconText: "󰑐"
-          foreground: root.bar.foreground
-          horizontalPadding: Style.spacing.controlPaddingY
-          verticalPadding: Style.spacing.controlPaddingY
-          onClicked: if (root.weather && root.weather.refresh) root.weather.refresh()
+          spacing: Style.space(2)
+
+          Button {
+            visible: !root.editingLocation
+            iconText: ""
+            tooltipText: "Ganti lokasi / gunakan otomatis"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingY
+            verticalPadding: Style.spacing.controlPaddingY
+            onClicked: root.startEditingLocation()
+          }
+
+          Button {
+            visible: !root.editingLocation
+            iconText: "󰑐"
+            tooltipText: "Perbarui cuaca"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingY
+            verticalPadding: Style.spacing.controlPaddingY
+            onClicked: if (root.weather && root.weather.refresh) root.weather.refresh()
+          }
+
+          Button {
+            visible: root.editingLocation
+            iconText: root.savingLocation ? "󰦖" : "✓"
+            iconSpinning: root.savingLocation
+            tooltipText: "Simpan lokasi"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingY
+            verticalPadding: Style.spacing.controlPaddingY
+            onClicked: if (!root.savingLocation) root.saveLocation()
+          }
+
+          Button {
+            visible: root.editingLocation
+            text: "AUTO"
+            tooltipText: "Lokasi perangkat melalui GeoClue"
+            foreground: root.bar.foreground
+            fontSize: Style.font.caption
+            horizontalPadding: Style.spacing.controlPaddingY
+            verticalPadding: Style.spacing.controlPaddingY
+            onClicked: if (!root.savingLocation) root.useAutomaticLocation()
+          }
+
+          Button {
+            visible: root.editingLocation
+            iconText: "✕"
+            tooltipText: "Batal"
+            foreground: root.bar.foreground
+            horizontalPadding: Style.spacing.controlPaddingY
+            verticalPadding: Style.spacing.controlPaddingY
+            onClicked: if (!root.savingLocation) root.cancelEditingLocation()
+          }
         }
       }
 

@@ -7,7 +7,9 @@ BarWidget {
   id: root
   moduleName: "celestune-bar"
 
-  readonly property var mediaService: bar?.shell?.firstPartyServiceFor("omarchy.media")
+  // Omarchy 4 does not expose its private media service to bar-widget
+  // plugins. Use the local MPRIS controller instead.
+  readonly property var mediaService: media
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
   readonly property var weatherPanel: weatherLoader.item
   readonly property bool hasMedia: activePlayer !== null
@@ -18,14 +20,34 @@ BarWidget {
     ? weatherPanel.label : "󰖐"
   readonly property string weatherTemp: weatherPanel && weatherPanel.reportTempNum !== ""
     ? weatherPanel.reportTempNum + weatherPanel.tempUnit : ""
+  readonly property var clockFormats: [
+    "ddd HH:mm",
+    "HH:mm",
+    "h:mm AP",
+    "ddd d MMM HH:mm",
+    "ddd d MMM h:mm AP",
+    "dddd HH:mm",
+    "dddd h:mm AP",
+    "yyyy-MM-dd HH:mm"
+  ]
+  readonly property string activeClockFormat: setting("format", "ddd HH:mm")
 
   property bool opened: false
   property date now: new Date()
   property bool popoutSwitchClosing: false
 
-  function open() { opened = true }
-  function close() { opened = false }
-  function togglePanel() { opened = !opened }
+  function open() {
+    syncWeatherLocation()
+    opened = true
+  }
+  function close() {
+    opened = false
+    if (weatherPanel && weatherPanel.opened) weatherPanel.close()
+  }
+  function togglePanel() {
+    if (opened || (weatherPanel && weatherPanel.opened)) close()
+    else open()
+  }
   function closeForPopoutSwitch() {
     popoutSwitchClosing = true
     close()
@@ -39,7 +61,31 @@ BarWidget {
   }
 
   function refreshWeather() {
-    if (weatherPanel && weatherPanel.refresh) weatherPanel.refresh()
+    syncWeatherLocation()
+    if (weatherPanel && weatherPanel.refresh) Qt.callLater(weatherPanel.refresh)
+  }
+
+  function syncWeatherLocation() {
+    if (weatherPanel && weatherPanel.locationFile)
+      weatherPanel.locationFile.reload()
+  }
+
+  function cycleClockFormat() {
+    var current = String(activeClockFormat)
+    var index = clockFormats.indexOf(current)
+    var next = clockFormats[(index + 1) % clockFormats.length]
+
+    var entry = { id: root.moduleName }
+    for (var key in root.settings) {
+      if (key !== "id") entry[key] = root.settings[key]
+    }
+    entry.format = next
+
+    root.settings = entry
+    root.now = new Date()
+    if (root.bar && root.bar.shell
+        && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
   function shortText(value, limit) {
@@ -48,7 +94,7 @@ BarWidget {
   }
 
   function barLabel() {
-    var clock = Qt.formatDateTime(now, "ddd HH:mm")
+    var clock = Qt.formatDateTime(now, activeClockFormat)
     var weather = weatherIcon + (weatherTemp !== "" ? " " + weatherTemp : "")
     var media = hasMedia ? playIcon + " " + shortText(mediaTitle, 18) : ""
     if (vertical) return weatherIcon
@@ -62,16 +108,19 @@ BarWidget {
     if ("settings" in target) target.settings = ({})
     if ("anchorItem" in target) target.anchorItem = pill
     if ("hostWidget" in target) target.hostWidget = root
+    if (target.locationFile) target.locationFile.reload()
   }
 
   onBarChanged: injectWeather()
 
-  Timer {
-    interval: 30000
-    repeat: true
-    running: true
-    triggeredOnStart: true
-    onTriggered: root.now = new Date()
+  MediaSource {
+    id: media
+  }
+
+  SystemClock {
+    id: clock
+    precision: SystemClock.Minutes
+    onDateChanged: root.now = date
   }
 
   Loader {
@@ -95,13 +144,13 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: root.barLabel()
-    active: root.opened
+    active: root.opened || (root.weatherPanel && root.weatherPanel.opened)
     horizontalMargin: 7
-    tooltipText: "Dashboard\nKlik: buka · Tengah: play/pause · Kanan: refresh cuaca"
+    tooltipText: "Dashboard\nKlik: buka · Tengah: play/pause · Kanan: format jam · Gulir: ganti lagu"
 
     onPressed: function(button) {
       if (button === Qt.MiddleButton) root.mediaAction("playPause")
-      else if (button === Qt.RightButton) root.refreshWeather()
+      else if (button === Qt.RightButton) root.cycleClockFormat()
       else root.togglePanel()
     }
 
@@ -110,10 +159,8 @@ BarWidget {
     }
   }
 
-  // PopupCard's focus grab treats the whole bar window as an allowed surface,
-  // so a click on another bar widget is not considered an outside click.
-  // Observe the bar's registered click targets and dismiss this dashboard when
-  // any target other than our own pill is pressed.
+  // Observe bar targets as an extra dismissal path alongside KeyboardPanel's
+  // full-screen outside-click surface.
   Repeater {
     model: root.bar ? root.bar.clickTargets : []
 
@@ -130,7 +177,9 @@ BarWidget {
         ignoreUnknownSignals: true
 
         function onPressed(button) {
-          if (root.opened && barClickObserver.modelData !== pill) root.close()
+          var weatherOpen = root.weatherPanel && root.weatherPanel.opened
+          if ((root.opened || weatherOpen) && barClickObserver.modelData !== pill)
+            root.close()
         }
       }
     }
@@ -141,28 +190,37 @@ BarWidget {
     ignoreUnknownSignals: true
 
     function onActivePopoutChanged() {
-      if (root.opened && root.bar && root.bar.activePopout
+      var weatherOpen = root.weatherPanel && root.weatherPanel.opened
+      if ((root.opened || weatherOpen) && root.bar && root.bar.activePopout
           && root.bar.activePopout !== root) root.close()
     }
   }
 
-  PopupCard {
+  KeyboardPanel {
     id: popup
     anchorItem: root
     bar: root.bar
     owner: root
     open: root.opened
     centerOnBar: true
+    focusTarget: keyCatcher
     contentWidth: popup.fittedContentWidth(Style.space(760))
     contentHeight: popup.fittedContentHeight(dashboard.implicitHeight)
 
-    Dashboard {
-      id: dashboard
+    PanelKeyCatcher {
       anchors.fill: parent
-      bar: root.bar
-      weather: root.weatherPanel
-      mediaService: root.mediaService
-      now: root.now
+      id: keyCatcher
+      blocked: dashboard.editingLocation
+      onCloseRequested: root.close()
+
+      Dashboard {
+        id: dashboard
+        anchors.fill: parent
+        bar: root.bar
+        weather: root.weatherPanel
+        mediaService: root.mediaService
+        now: root.now
+      }
     }
   }
 }

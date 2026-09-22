@@ -8,6 +8,7 @@ Item {
   property var weather: null
   property var mediaService: null
   property date now: new Date()
+  readonly property bool editingLocation: weatherCard.editingLocation
 
   implicitWidth: Style.space(760)
   implicitHeight: Style.space(420)
@@ -22,6 +23,7 @@ Item {
       spacing: Style.space(12)
 
       WeatherCard {
+        id: weatherCard
         width: parent.width
         height: Style.space(132)
         bar: root.bar

@@ -20,12 +20,14 @@ BorderSurface {
   readonly property string playIcon: activePlayer && activePlayer.isPlaying ? "󰏤" : "󰐊"
   readonly property real trackLength: activePlayer && activePlayer.lengthSupported
     ? Math.max(0, Number(activePlayer.length) || 0) : 0
-  readonly property real playerVolume: activePlayer && activePlayer.volumeSupported
-    ? Math.max(0, Math.min(1, Number(activePlayer.volume) || 0)) : 0
+  readonly property bool volumeSupported: mediaService && mediaService.volumeSupported
+  readonly property real playerVolume: volumeSupported
+    ? Math.max(0, Math.min(1, Number(mediaService.volume) || 0)) : 0
   readonly property real playerProgress: trackLength > 0
     ? Math.max(0, Math.min(1, displayPosition / trackLength)) : 0
 
   property real displayPosition: 0
+  property real displayVolume: playerVolume
   property int visualizerPhase: 0
 
   function playerKey() {
@@ -48,7 +50,14 @@ BorderSurface {
     return minutes + ":" + (remainder < 10 ? "0" : "") + remainder
   }
 
+  function changeVolume(value) {
+    var next = Math.max(0, Math.min(1, Number(value) || 0))
+    displayVolume = next
+    if (mediaService && volumeSupported) mediaService.setVolume(next)
+  }
+
   onActivePlayerChanged: syncPosition()
+  onPlayerVolumeChanged: if (!volumeSlider.dragging) displayVolume = playerVolume
   onPlayerProgressChanged: progressArc.requestPaint()
 
   Timer {
@@ -325,10 +334,10 @@ BorderSurface {
     Row {
       width: parent.width
       spacing: Style.space(6)
-      visible: root.activePlayer && root.activePlayer.volumeSupported
+      visible: root.activePlayer && root.volumeSupported
 
       Text {
-        text: root.playerVolume <= 0.01 ? "󰝟" : "󰕾"
+        text: root.displayVolume <= 0.01 ? "󰝟" : "󰕾"
         color: root.bar.foreground
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.bodySmall
@@ -336,22 +345,21 @@ BorderSurface {
       }
 
       PanelSlider {
+        id: volumeSlider
         bar: root.bar
         width: parent.width - Style.space(55)
         minimum: 0
         maximum: 1
         step: 0.05
-        value: root.playerVolume
+        value: root.displayVolume
         knobSize: Style.space(10)
-        onMoved: function(value) {
-          if (root.activePlayer && root.activePlayer.volumeSupported)
-            root.activePlayer.volume = value
-        }
+        onMoved: function(value) { root.changeVolume(value) }
+        onReleased: function(value) { root.changeVolume(value) }
       }
 
       Text {
         width: Style.space(32)
-        text: Math.round(root.playerVolume * 100) + "%"
+        text: Math.round(root.displayVolume * 100) + "%"
         color: Qt.darker(root.bar.foreground, 1.35)
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.caption
