@@ -13,6 +13,8 @@ from Quickshell's MPRIS service.
 - Device location through GeoClue with accuracy checks and manual-city fallback.
 - Monthly calendar with today highlighting.
 - MPRIS album art, track details, playback controls, seek, and volume.
+- Media header follows OmaLogo's configured distro icon when present, with
+  the original cat glyph as the fallback.
 - Compact bar label combining time, weather, and the active track.
 - Theme-aware styling using Omarchy Shell colors and spacing.
 
@@ -73,6 +75,7 @@ omarchy plugin remove celestune-bar
 
 - [Pierorivera1](https://github.com/Pierorivera1) — persistent clock formats and setup documentation.
 - [VideoPants](https://github.com/VideoPants) — direct MPRIS support for Omarchy 4.
+  Also contributed the optional OmaLogo-aware media header.
 
 ## License
 

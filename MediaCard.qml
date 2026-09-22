@@ -2,12 +2,16 @@ import QtQuick
 import QtQuick.Effects
 import qs.Commons
 import qs.Ui
+import "DistroIcons.js" as DistroIcons
 
 BorderSurface {
   id: root
 
   required property QtObject bar
   property var mediaService: null
+
+  readonly property var barConfig: bar && bar.shell ? bar.shell.barConfig : null
+  readonly property var headerDistro: DistroIcons.headerIcon(barConfig)
 
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
   readonly property bool hasMedia: activePlayer !== null
@@ -99,9 +103,10 @@ BorderSurface {
 
       Text {
         id: cat
-        text: "󰄛"
+        text: root.headerDistro.icon
+        textFormat: Text.PlainText
         color: root.bar.foreground
-        font.family: root.bar.fontFamily
+        font.family: root.headerDistro.font === "omarchy" ? "omarchy" : root.bar.fontFamily
         font.pixelSize: Style.font.iconLarge
         scale: root.activePlayer && root.activePlayer.isPlaying ? 1.05 : 1
 
